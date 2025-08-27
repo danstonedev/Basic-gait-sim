@@ -3,202 +3,253 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Simple Gait Simulator (Sagittal)</title>
+<title>Gait Simulator – IK stance foot</title>
 <style>
-  :root {
-    --bg:#0f172a; --panel:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#10b981;
-  }
-  html,body {height:100%; margin:0; background:var(--bg); color:var(--ink); font:14px/1.3 system-ui,Segoe UI,Roboto,Arial;}
-  .wrap {max-width:1000px; margin:auto; padding:16px; display:grid; gap:12px;}
-  h1 {font-size:20px; margin:0 0 4px;}
-  .toolbar {display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-  .controls, .notes {background:var(--panel); border-radius:10px; padding:12px;}
-  .controls h2 {font-size:14px; margin:0 0 8px; color:var(--muted);}
-  .row {display:grid; grid-template-columns:160px 1fr 60px; gap:10px; align-items:center; margin:6px 0;}
-  input[type=range] {width:100%;}
-  select, button {background:#0b1220; color:var(--ink); border:1px solid #1f2937; border-radius:8px; padding:6px 10px;}
-  button.primary {background:var(--accent); color:#04110d; border:none; font-weight:600}
-  canvas {width:100%; height:360px; background:#0b1220; border-radius:10px; display:block}
-  .legend {display:flex; gap:12px; font-size:12px; color:var(--muted)}
-  .badge {display:inline-flex; align-items:center; gap:6px}
-  .dot {width:10px; height:10px; border-radius:50%}
-  .footprint {position:relative; height:10px}
-  .footprint::before {content:""; position:absolute; inset:0; background:
-    repeating-linear-gradient(90deg, transparent, transparent 30px, #1f2937 31px);
-    opacity:.6}
-  small {color:var(--muted)}
+  :root { --bg:#0f172a; --panel:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#10b981; }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:1000px;margin:auto;padding:16px;display:grid;gap:12px}
+  h1{font-size:20px;margin:0 0 6px}
+  canvas{width:100%;height:360px;background:#0b1220;border-radius:10px;display:block}
+  .toolbar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .controls,.notes{background:var(--panel);border-radius:10px;padding:12px}
+  .row{display:grid;grid-template-columns:160px 1fr 64px;gap:10px;align-items:center;margin:6px 0}
+  input[type=range]{width:100%}
+  select,button{background:#0b1220;color:var(--ink);border:1px solid #1f2937;border-radius:8px;padding:6px 10px}
+  button.primary{background:var(--accent);color:#04110d;border:none;font-weight:600}
+  .legend{display:flex;gap:12px;font-size:12px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  small{color:var(--muted)}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div>
-      <h1>Simple Gait Simulator</h1>
-      <div class="legend">
-        <span class="badge"><span class="dot" style="background:#93c5fd"></span>Left</span>
-        <span class="badge"><span class="dot" style="background:#fca5a5"></span>Right</span>
-        <span class="badge">GRF arrow shows during stance</span>
-      </div>
+<div class="wrap">
+  <div>
+    <h1>Simple Gait Simulator (Improved Foot Contact)</h1>
+    <div class="legend">
+      <span><span class="dot" style="background:#93c5fd;display:inline-block"></span> Left</span>
+      <span><span class="dot" style="background:#fca5a5;display:inline-block"></span> Right</span>
+      <span>Stance foot planted via inverse kinematics</span>
     </div>
-
-    <canvas id="view" width="1000" height="360" aria-label="Gait animation canvas"></canvas>
-    <div class="footprint"></div>
-
-    <div class="toolbar">
-      <div class="controls">
-        <h2>Parameters</h2>
-        <div class="row">
-          <label for="cadence">Cadence (steps/min)</label>
-          <input id="cadence" type="range" min="60" max="140" step="1" value="100">
-          <output id="cadenceOut">100</output>
-        </div>
-        <div class="row">
-          <label for="step">Step length (m)</label>
-          <input id="step" type="range" min="0.40" max="0.90" step="0.01" value="0.65">
-          <output id="stepOut">0.65</output>
-        </div>
-        <div class="row">
-          <label for="stance">Stance phase (%)</label>
-          <input id="stance" type="range" min="45" max="70" step="1" value="60">
-          <output id="stanceOut">60</output>
-        </div>
-        <div class="row">
-          <label for="height">Body height (m)</label>
-          <input id="height" type="range" min="1.40" max="1.95" step="0.01" value="1.75">
-          <output id="heightOut">1.75</output>
-        </div>
-        <div class="row">
-          <label for="preset">Preset</label>
-          <select id="preset">
-            <option value="normal" selected>Normal</option>
-            <option value="antalgicL">Antalgic (↓ L stance)</option>
-            <option value="antalgicR">Antalgic (↓ R stance)</option>
-            <option value="trendelenburgL">Trendelenburg (L drop)</option>
-            <option value="trendelenburgR">Trendelenburg (R drop)</option>
-            <option value="circumductionL">Circumduction (L)</option>
-            <option value="circumductionR">Circumduction (R)</option>
-          </select>
-          <button id="reset">Reset</button>
-        </div>
-        <div class="row">
-          <label>Playback</label>
-          <button id="play" class="primary">Play</button>
-          <button id="pause">Pause</button>
-        </div>
-        <div class="row">
-          <label>Derived speed</label>
-          <div><small id="speed">—</small></div>
-        </div>
-      </div>
-
-      <div class="notes">
-        <h2>Teaching Notes</h2>
-        <ul>
-          <li>Adjust cadence, step length, stance% to explore relationships.</li>
-          <li>Presets demonstrate classic gait deviations.</li>
-          <li>GRF arrow appears only during stance.</li>
-          <li>Angles are smooth sine templates—use to discuss ranges & timing.</li>
-        </ul>
-      </div>
-    </div>
-
-    <small>Educational approximation (not clinical quantification).</small>
   </div>
+
+  <canvas id="view" width="1000" height="360" aria-label="Gait animation canvas"></canvas>
+
+  <div class="toolbar">
+    <div class="controls">
+      <div class="row">
+        <label>Cadence (steps/min)</label>
+        <input id="cadence" type="range" min="60" max="140" step="1" value="100"><output id="cadenceOut">100</output>
+      </div>
+      <div class="row">
+        <label>Step length (m)</label>
+        <input id="step" type="range" min="0.40" max="0.90" step="0.01" value="0.65"><output id="stepOut">0.65</output>
+      </div>
+      <div class="row">
+        <label>Stance phase (%)</label>
+        <input id="stance" type="range" min="45" max="70" step="1" value="60"><output id="stanceOut">60</output>
+      </div>
+      <div class="row">
+        <label>Body height (m)</label>
+        <input id="height" type="range" min="1.40" max="1.95" step="0.01" value="1.75"><output id="heightOut">1.75</output>
+      </div>
+      <div class="row">
+        <label>Preset</label>
+        <select id="preset">
+          <option value="normal" selected>Normal</option>
+          <option value="antalgicL">Antalgic (↓ L stance)</option>
+          <option value="antalgicR">Antalgic (↓ R stance)</option>
+          <option value="trendelenburgL">Trendelenburg (L drop)</option>
+          <option value="trendelenburgR">Trendelenburg (R drop)</option>
+          <option value="circumductionL">Circumduction (L)</option>
+          <option value="circumductionR">Circumduction (R)</option>
+        </select>
+        <button id="reset">Reset</button>
+      </div>
+      <div class="row"><label>Playback</label><button id="play" class="primary">Play</button><button id="pause">Pause</button></div>
+      <div class="row"><label>Derived speed</label><div><small id="speed">—</small></div></div>
+    </div>
+    <div class="notes">
+      <strong>Model highlights</strong>
+      <ul>
+        <li><b>Foot plant:</b> stance ankle fixed; hip passes over it.</li>
+        <li><b>2-link IK:</b> hip & knee solved by geometry to reach foot.</li>
+        <li><b>Swing:</b> cycloid arc with toe-clearance.</li>
+        <li><b>Heel→mid→push-off:</b> foot rocker angles during stance.</li>
+      </ul>
+    </div>
+  </div>
+
+  <small>Educational model; not for quantitative analysis.</small>
+</div>
 
 <script>
 (() => {
-  const canvas = document.getElementById('view');
-  const ctx = canvas.getContext('2d');
+  const C = document.getElementById('view');
+  const ctx = C.getContext('2d');
 
   // UI
-  const cadence = document.getElementById('cadence');
-  const step = document.getElementById('step');
-  const stance = document.getElementById('stance');
-  const height = document.getElementById('height');
-  const cadenceOut = document.getElementById('cadenceOut');
-  const stepOut = document.getElementById('stepOut');
-  const stanceOut = document.getElementById('stanceOut');
-  const heightOut = document.getElementById('heightOut');
-  const speedOut = document.getElementById('speed');
-  const preset = document.getElementById('preset');
-  const playBtn = document.getElementById('play');
-  const pauseBtn = document.getElementById('pause');
-  const resetBtn = document.getElementById('reset');
+  const el = (id)=>document.getElementById(id);
+  const cadence = el('cadence'), step = el('step'), stance = el('stance'), height = el('height');
+  const cadenceOut = el('cadenceOut'), stepOut = el('stepOut'), stanceOut = el('stanceOut'), heightOut = el('heightOut');
+  const speedOut = el('speed'), preset = el('preset'), playBtn = el('play'), pauseBtn = el('pause'), resetBtn = el('reset');
 
+  // State/params
   let running = false, t=0, last=performance.now();
-
-  const P = {cadence:100, stepLen:0.65, stancePct:60, height:1.75,
-             pelvisDropL:0, pelvisDropR:0, circumductionL:0, circumductionR:0};
-
-  function updateOutputs() {
-    cadenceOut.textContent=P.cadence;
+  const P = { cadence:100, stepLen:0.65, stancePct:60, height:1.75, pelvisDropL:0, pelvisDropR:0, circumductionL:0, circumductionR:0 };
+  const m2px = 260;
+  function segs(){ const H=P.height; return { thigh:0.245*H, shank:0.246*H, foot:0.152*H, pelvisW:0.19*H }; }
+  function updateOutputs(){
+    cadenceOut.textContent=P.cadence.toFixed(0);
     stepOut.textContent=P.stepLen.toFixed(2);
-    stanceOut.textContent=P.stancePct;
+    stanceOut.textContent=P.stancePct.toFixed(0);
     heightOut.textContent=P.height.toFixed(2);
-    const v=(P.cadence*P.stepLen)/60;
-    speedOut.textContent=v.toFixed(2)+" m/s";
+    const v=(P.cadence*P.stepLen)/60; speedOut.textContent=v.toFixed(2)+' m/s';
   }
 
-  function segs(){const H=P.height; return{thigh:0.245*H,shank:0.246*H,foot:0.152*H,pelvisW:0.19*H};}
+  // Helpers
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  function lawCosinesAngle(a,b,c){ return Math.acos(clamp((a*a + b*b - c*c)/(2*a*b), -1, 1)); }
 
-  function jointAngles(phase){
-    const φ=phase%1;
-    const hip=15+15*Math.sin(2*Math.PI*(φ-0.05));
-    const knee=10+25*Math.sin(2*Math.PI*(φ+0.15))+25*Math.max(0,Math.sin(2*Math.PI*(φ+0.15))**3);
-    const swingBump=35*Math.max(0,Math.sin(2*Math.PI*(φ+0.35)));
-    const kneeDeg=Math.min(65,knee+swingBump);
-    const ankle=-5+10*Math.sin(2*Math.PI*(φ-0.05))-10*Math.sin(4*Math.PI*(φ-0.05));
-    return {hip:hip,knee:kneeDeg,ankle:ankle};
+  // Foot rocker (deg) across stance fraction u in [0,1]
+  function footAngleStance(u){
+    if(u < 0.15){ // heel rocker
+      return 10*(1 - u/0.15);
+    } else if (u < 0.7){ // tibial progression
+      const v=(u-0.15)/(0.55);
+      return 0 + 8*v;
+    } else { // push-off PF
+      const v=(u-0.7)/0.3;
+      return 8 + (-20)*v;
+    }
   }
 
-  function stanceWindow(p){return (p%1)<(P.stancePct/100);}
-
-  function applyPreset(name){
-    P.pelvisDropL=P.pelvisDropR=0; P.circumductionL=P.circumductionR=0;
-    if(name==='antalgicL')P.stancePct=55;
-    if(name==='antalgicR')P.stancePct=55;
-    if(name==='trendelenburgL')P.pelvisDropL=6;
-    if(name==='trendelenburgR')P.pelvisDropR=6;
-    if(name==='circumductionL')P.circumductionL=0.05;
-    if(name==='circumductionR')P.circumductionR=0.05;
+  // Swing ankle trajectory (cycloid-ish) from xA->xB at ground line
+  function swingAnkle(xA, xB, u, groundY){
+    const x = xA + (xB - xA)*u;
+    const amp = 0.05 * P.height * m2px; // clearance
+    const y = groundY - amp*Math.sin(Math.PI*u); // up & down
+    return {x, y};
   }
 
-  function drawFrame(dt){
-    if(running)t+=dt;
-    const stepHz=P.cadence/60, strideHz=stepHz/2;
-    const phaseR=(t*strideHz)%1, phaseL=(phaseR+0.5)%1;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    const groundY=canvas.height-40, m2px=260, vx=(P.cadence*P.stepLen/60)*m2px;
-    const x0=80+vx*t, S=segs(), pelvisY=groundY-(S.thigh+S.shank)*0.92, pelvisX=x0%(canvas.width+400);
-    ctx.strokeStyle='#1f2937'; ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(canvas.width,groundY); ctx.stroke();
+  function draw() {
+    const now = performance.now(), dt = Math.min(0.05,(now-last)/1000); last = now;
+    if (running) t += dt;
 
-    function leg(side,phase,color){
-      const ang=jointAngles(phase); const d2r=Math.PI/180;
-      const hipX=pelvisX+(side==='R'?+S.pelvisW*0.5:-S.pelvisW*0.5)*m2px/P.height, hipY=pelvisY;
-      const hx=hipX,hy=hipY, kx=hx+S.thigh*m2px*Math.cos(-ang.hip*d2r), ky=hy+S.thigh*m2px*Math.sin(-ang.hip*d2r);
-      const ax=kx+S.shank*m2px*Math.cos(-(ang.hip-ang.knee)*d2r), ay=ky+S.shank*m2px*Math.sin(-(ang.hip-ang.knee)*d2r);
-      const fx=ax+S.foot*m2px*Math.cos(-(ang.hip-ang.knee+ang.ankle)*d2r), fy=ay+S.foot*m2px*Math.sin(-(ang.hip-ang.knee+ang.ankle)*d2r);
-      ctx.strokeStyle=color; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(hx,hy); ctx.lineTo(kx,ky); ctx.lineTo(ax,ay); ctx.lineTo(fx,fy); ctx.stroke();
-      if(stanceWindow(phase)){ctx.strokeStyle='#34d399';ctx.beginPath();ctx.moveTo(ax,groundY);ctx.lineTo(ax,groundY-40);ctx.stroke();}
+    // Environment
+    const groundY = C.height - 40;
+    ctx.clearRect(0,0,C.width,C.height);
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(C.width,groundY); ctx.stroke();
+
+    // Gait timing
+    const stepHz = P.cadence/60, strideHz = stepHz/2;
+    const phaseR = (t*strideHz) % 1;        // right foot cycle
+    const phaseL = (phaseR + 0.5) % 1;      // opposite
+    const sFrac = P.stancePct/100;
+
+    // Pelvis (COM) path
+    const worldSpeed = (P.cadence*P.stepLen)/60; // m/s
+    const pelvisX = (80 + worldSpeed*m2px*t) % (C.width + 400);
+    const S = segs();
+    // mild vertical COM oscillation (~3 cm peak-to-peak)
+    const pelvisY = groundY - (S.thigh + S.shank) * 0.92 + Math.sin(2*Math.PI*phaseR)*0.03*P.height*m2px;
+
+    // Step anchors (where each ankle sits during stance)
+    const rightAnchor = pelvisX + (-P.stepLen/2)*m2px;
+    const leftAnchor  = pelvisX + ( P.stepLen/2)*m2px;
+
+    // Render pelvis
+    ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(pelvisX - S.pelvisW*0.5*m2px/P.height, pelvisY);
+    ctx.lineTo(pelvisX + S.pelvisW*0.5*m2px/P.height, pelvisY);
+    ctx.stroke();
+
+    // Draw each leg using IK toward ankle target (stance: fixed; swing: moving)
+    function drawLeg(side, phase, color, anchorX){
+      const inStance = phase < sFrac;
+      let ankleX, ankleY, footDeg=0, u;
+
+      if (inStance){
+        u = phase / sFrac;                  // stance progress 0..1
+        ankleX = anchorX; ankleY = groundY; // planted
+        footDeg = footAngleStance(u);
+      } else {
+        u = (phase - sFrac) / (1 - sFrac);  // swing 0..1
+        const nextAnchor = anchorX + (side==='R' ? P.stepLen*m2px : -P.stepLen*m2px);
+        const p = swingAnkle(anchorX, nextAnchor, u, groundY);
+        ankleX = p.x; ankleY = p.y;
+        footDeg = 0; // neutral during swing
+      }
+
+      // Inverse kinematics: solve hip & knee to reach ankle
+      const L1=S.thigh*m2px, L2=S.shank*m2px;
+      const hx = pelvisX + (side==='R'? +S.pelvisW*0.5 : -S.pelvisW*0.5) * m2px / P.height;
+      const hy = pelvisY;
+      const dx = ankleX - hx, dy = ankleY - hy;
+      const d = Math.hypot(dx,dy);
+
+      // Guard: clamp d within reachable workspace
+      const dClamped = clamp(d, Math.abs(L1-L2)+1e-6, (L1+L2)-1e-6);
+      const base = Math.atan2(dy, dx);
+      const alpha = lawCosinesAngle(L1, dClamped, L2); // hip subtended
+      const hipAng = base - alpha;                     // radians
+      const kneeAng = Math.PI - lawCosinesAngle(L1, L2, dClamped); // internal knee angle
+
+      // Forward kinematics to points
+      const kx = hx + L1*Math.cos(hipAng);
+      const ky = hy + L1*Math.sin(hipAng);
+      const shankAngle = hipAng + (Math.PI - kneeAng);
+      const ax = kx + L2*Math.cos(shankAngle);
+      const ay = ky + L2*Math.sin(shankAngle);
+
+      // Foot segment
+      const footLen = S.foot*m2px;
+      const footRad = footDeg * Math.PI/180;
+      const fx = ax + footLen*Math.cos(footRad);
+      const fy = ay + footLen*Math.sin(footRad);
+
+      // Draw
+      ctx.strokeStyle=color; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(hx,hy); ctx.lineTo(kx,ky); ctx.lineTo(ax,ay); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(fx,fy); ctx.stroke();
+
+      // GRF arrow during stance
+      if (inStance){
+        const mag = 0.8 + 0.4*Math.sin(Math.PI*u);
+        const h = 40*mag;
+        ctx.strokeStyle='#34d399'; ctx.fillStyle='#34d399'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(ax, groundY); ctx.lineTo(ax, groundY - h); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax-5, groundY-h+10); ctx.lineTo(ax+5, groundY-h+10); ctx.lineTo(ax, groundY-h-5); ctx.closePath(); ctx.fill();
+      }
     }
 
-    ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=6; ctx.beginPath();
-    ctx.moveTo(pelvisX-S.pelvisW*0.5*m2px/P.height,pelvisY);
-    ctx.lineTo(pelvisX+S.pelvisW*0.5*m2px/P.height,pelvisY); ctx.stroke();
+    drawLeg('L', phaseL, '#93c5fd', leftAnchor);
+    drawLeg('R', phaseR, '#fca5a5', rightAnchor);
 
-    leg('L',phaseL,'#93c5fd'); leg('R',phaseR,'#fca5a5');
+    requestAnimationFrame(draw);
   }
+  requestAnimationFrame(draw);
 
-  function tick(now){const dt=Math.min(0.05,(now-last)/1000);last=now;drawFrame(dt);requestAnimationFrame(tick);} requestAnimationFrame(tick);
-
+  // UI bindings
+  function sync(){ P.cadence=+cadence.value; P.stepLen=+step.value; P.stancePct=+stance.value; P.height=+height.value; updateOutputs(); }
   cadence.oninput=()=>{P.cadence=+cadence.value;updateOutputs();};
   step.oninput=()=>{P.stepLen=+step.value;updateOutputs();};
   stance.oninput=()=>{P.stancePct=+stance.value;updateOutputs();};
   height.oninput=()=>{P.height=+height.value;updateOutputs();};
-  preset.onchange=()=>{applyPreset(preset.value);updateOutputs();};
-  resetBtn.onclick=()=>{cadence.value=100;step.value=0.65;stance.value=60;height.value=1.75;preset.value='normal';applyPreset('normal');updateOutputs();};
-  playBtn.onclick=()=>{running=true;}; pauseBtn.onclick=()=>{running=false;};
-
-  updateOutputs(); applyPreset('normal');
+  playBtn.onclick=()=>running=true; pauseBtn.onclick=()=>running=false;
+  preset.onchange=()=>{ // simple deviations
+    P.pelvisDropL=P.pelvisDropR=0; P.circumductionL=P.circumductionR=0;
+    if(preset.value==='antalgicL') P.stancePct=55;
+    if(preset.value==='antalgicR') P.stancePct=55;
+    if(preset.value==='trendelenburgL') P.pelvisDropL=6;
+    if(preset.value==='trendelenburgR') P.pelvisDropR=6;
+    if(preset.value==='circumductionL') P.circumductionL=0.05;
+    if(preset.value==='circumductionR') P.circumductionR=0.05;
+    stance.value=P.stancePct; updateOutputs();
+  };
+  resetBtn.onclick=()=>{cadence.value=100;step.value=0.65;stance.value=60;height.value=1.75;preset.value='normal';sync();};
+  sync();
 })();
 </script>
 </body>
